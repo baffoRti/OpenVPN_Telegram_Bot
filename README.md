@@ -32,27 +32,16 @@ systemctl status openvpn
 
 ### Step 2: Upload the Project
 
-Copy the project to the server (e.g., via scp or rsync):
+Clone the repo to the server:
 
 ```bash
-# From your local machine
-scp -r /path/to/MyServerAgent-prod user@server:/opt/openvpn-bot
-```
-
-Or clone from your git repo:
-
-```bash
-ssh user@server
-sudo mkdir -p /opt/openvpn-bot
-sudo chown $USER:$USER /opt/openvpn-bot
-cd /opt/openvpn-bot
-git clone <your-repo-url> .
+git clone https://github.com/baffoRti/OpenVPN_Telegram_Bot
 ```
 
 ### Step 3: Set Up Python Environment
 
 ```bash
-cd /opt/openvpn-bot
+cd /OpenVPN_Telegram_Bot/openvpn-bot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -94,17 +83,16 @@ Expected output: `status /var/log/openvpn/status.log 30`
 
 #### 4c. Certificate Script (manage_certs.sh)
 
-Copy the certificate management script and make it executable:
+Make the certificate management script executable:
 
 ```bash
-sudo cp /opt/openvpn-bot/manage_certs.sh /opt/openvpn-bot/manage_certs.sh
-sudo chmod +x /opt/openvpn-bot/manage_certs.sh
+sudo chmod +x /OpenVPN_Telegram_Bot/manage_certs.sh
 ```
 
 Test it:
 
 ```bash
-sudo /opt/openvpn-bot/manage_certs.sh list
+sudo /OpenVPN_Telegram_Bot/manage_certs.sh list
 ```
 
 The script wraps easy-rsa at `/etc/openvpn/easy-rsa/` (installed by openvpn-install.sh) and supports 4 operations:
@@ -121,7 +109,6 @@ Generated `.ovpn` files are saved to the path configured in `OPENVPN_CERT_DIR` (
 ### Step 5: Configure the Bot
 
 ```bash
-cd /opt/openvpn-bot
 cp .env.example .env
 nano .env
 ```
@@ -131,8 +118,8 @@ Fill in:
 ```env
 TELEGRAM_TOKEN=your_bot_token_from_botfather
 ADMIN_IDS=your_telegram_id,another_admin_id
-OPENVPN_DB_PATH=/opt/openvpn-bot/openvpn_stats.db
-CERT_SCRIPT_PATH=/opt/openvpn-bot/manage_certs.sh
+OPENVPN_DB_PATH=/OpenVPN_Telegram_Bot/openvpn_stats.db
+CERT_SCRIPT_PATH=/OpenVPN_Telegram_Bot/manage_certs.sh
 OPENVPN_CERT_DIR=/etc/openvpn/easy-rsa/pki
 OPENVPN_STATUS_FILE=/var/log/openvpn/status.log
 OPENVPN_MANAGEMENT_HOST=localhost
@@ -151,7 +138,7 @@ sudo visudo -f /etc/sudoers.d/openvpn-bot
 Add this line (replace `your_user` with the actual user running the bot, adjust service name if needed):
 
 ```
-your_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start openvpn-server@server, /usr/bin/systemctl stop openvpn-server@server, /usr/bin/systemctl restart openvpn-server@server, /usr/bin/systemctl is-active openvpn-server@server, /opt/openvpn-bot/manage_certs.sh
+your_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start openvpn-server@server, /usr/bin/systemctl stop openvpn-server@server, /usr/bin/systemctl restart openvpn-server@server, /usr/bin/systemctl is-active openvpn-server@server, /OpenVPN_Telegram_Bot/manage_certs.sh
 ```
 
 > **Note:** openvpn-install.sh may use `openvpn@server` instead of `openvpn-server@server` depending on the OS. Check with `systemctl list-units | grep openvpn`.
@@ -185,8 +172,8 @@ After=network.target openvpn-server@server.service
 Type=simple
 User=your_user
 Group=your_user
-WorkingDirectory=/opt/openvpn-bot
-ExecStart=/opt/openvpn-bot/venv/bin/python -m openvpn_bot.bot
+WorkingDirectory=/OpenVPN_Telegram_Bot
+ExecStart=/OpenVPN_Telegram_Bot/venv/bin/python -m openvpn_bot.bot
 Restart=always
 RestartSec=5
 
@@ -260,7 +247,7 @@ sudo systemctl restart openvpn-bot
 sudo journalctl -u openvpn-bot -f
 
 # Update the bot
-cd /opt/openvpn-bot
+cd /OpenVPN_Telegram_Bot
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
