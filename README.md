@@ -170,10 +170,10 @@ After=network.target openvpn-server@server.service
 
 [Service]
 Type=simple
-User=your_user
-Group=your_user
-WorkingDirectory=/OpenVPN_Telegram_Bot
-ExecStart=/OpenVPN_Telegram_Bot/venv/bin/python -m openvpn_bot.bot
+User=your_user # Specify your user
+Group=your_user # Specify your user
+WorkingDirectory=/OpenVPN_Telegram_Bot # Specify your directory
+ExecStart=/OpenVPN_Telegram_Bot/venv/bin/python -m openvpn_bot.bot # Specify your path
 Restart=always
 RestartSec=5
 
