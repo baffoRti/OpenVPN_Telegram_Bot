@@ -258,5 +258,4 @@ sudo systemctl restart openvpn-bot
 
 - Only users listed in `ADMIN_IDS` can interact with the bot
 - Sudoers is restricted to specific systemctl commands only
-- `.env` with secrets is excluded from version control via `.gitignore`
 - Ensure the certificate management script is owned by root and not world-writable
