@@ -230,7 +230,7 @@ Send `/start` to your bot in Telegram.
 
 ## Database Schema
 
-The bot expects an SQLite3 database with the following tables:
+The bot expects an SQLite3 database with the following tables (You can find out more [here](https://github.com/baffoRti/OpenVPN_Traffic_Monitor "OpenVPN Traffic Monitor")):
 
 ### user_traffic_monthly
 - `common_name` (TEXT, PRIMARY KEY)
