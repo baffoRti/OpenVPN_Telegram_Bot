@@ -646,7 +646,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Prompt for certificate generation
             if query.message is not None:
                 await query.edit_message_text(
-                    text='Please enter the common name for the new certificate:\n\nExample: client1.example.com',
+                    text='Please enter the common name for the new certificate:',
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
                     ]])
