@@ -79,7 +79,7 @@ openvpn-install.sh already configures the status file at `/var/log/openvpn/statu
 grep '^status' /etc/openvpn/server.conf
 ```
 
-Expected output: `status /var/log/openvpn/status.log 30`
+Expected output: `status /var/log/openvpn/status.log`
 
 #### 4c. Certificate Script (manage_certs.sh)
 
