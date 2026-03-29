@@ -93,6 +93,19 @@ cp .env.example .env
 nano .env
 ```
 
+**Important:** Set the correct paths in `.env`:
+
+```bash
+# Set the full path to manage_certs.sh
+CERT_SCRIPT_PATH=/full/path/to/OpenVPN_Telegram_Bot/manage_certs.sh
+```
+
+For example, if you cloned the repo to `/home/user/OpenVPN_Telegram_Bot`:
+
+```bash
+CERT_SCRIPT_PATH=/home/user/OpenVPN_Telegram_Bot/manage_certs.sh
+```
+
 ### 5. Configure Sudoers
 
 Create `/etc/sudoers.d/openvpn-bot`:
