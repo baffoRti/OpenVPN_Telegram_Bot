@@ -6,7 +6,7 @@
 
 A Telegram bot for remote management of OpenVPN servers. Control your VPN service, monitor traffic, manage certificates, and handle connected clients — all from Telegram.
 
-![Bot Interface](docs/images/Interface_Example.png)
+![Bot Interface](images/Interface_Example.png)
 
 ## Features
 
