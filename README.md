@@ -224,7 +224,6 @@ OpenVPN_Telegram_Bot/
 ├── deploy/
 │   ├── install.sh           # Automated installation script
 │   ├── manage_certs.sh      # Certificate management script
-│   ├── .env.example         # Environment template
 │   ├── requirements.txt     # Python dependencies
 │   └── openvpn-bot.service  # Systemd service file
 ├── openvpn_bot/
