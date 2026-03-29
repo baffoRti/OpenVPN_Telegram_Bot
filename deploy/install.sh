@@ -164,6 +164,10 @@ if [[ -f ".env" ]]; then
     print_warning ".env file already exists, skipping"
 else
     cp .env.example .env
+    
+    # Update paths to match actual installation directory
+    sed -i "s|^CERT_SCRIPT_PATH=.*|CERT_SCRIPT_PATH=$INSTALL_DIR/manage_certs.sh|" .env
+        
     print_warning "Created .env file - YOU MUST EDIT IT BEFORE RUNNING THE BOT!"
     echo ""
     echo "Edit the configuration file:"
