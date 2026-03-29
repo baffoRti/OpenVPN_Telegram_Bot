@@ -2,6 +2,8 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 from openvpn_bot.utils.traffic_monitor import get_current_month_traffic, get_user_traffic, get_top_users, check_traffic_thresholds
+from openvpn_bot.utils.traffic_notifier import reset_notifications, check_and_notify
+from openvpn_bot.utils import validate_username
 from openvpn_bot.config import Config
 
 async def traffic_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -9,6 +11,11 @@ async def traffic_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = update.effective_user
     if user.id not in Config.ADMIN_IDS:
         await update.message.reply_text('You are not authorized to use this bot.')
+        return
+    
+    # Check if traffic monitor is available
+    if not Config.TRAFFIC_MONITOR_AVAILABLE:
+        await update.message.reply_text(Config.get_traffic_monitor_help_message())
         return
     
     # Get overall traffic for the current month
@@ -33,11 +40,22 @@ async def user_traffic(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text('You are not authorized to use this bot.')
         return
     
+    # Check if traffic monitor is available
+    if not Config.TRAFFIC_MONITOR_AVAILABLE:
+        await update.message.reply_text(Config.get_traffic_monitor_help_message())
+        return
+    
     if not context.args:
         await update.message.reply_text('Please specify a username.\nUsage: /user_traffic <username>')
         return
     
     username = context.args[0]
+    
+    # Validate username
+    if not validate_username(username):
+        await update.message.reply_text(f'❌ Invalid username: {username}')
+        return
+    
     traffic = get_user_traffic(username)
     
     message = f"📊 Traffic for user {username}:\n\n"
@@ -52,6 +70,11 @@ async def traffic_thresholds(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user = update.effective_user
     if user.id not in Config.ADMIN_IDS:
         await update.message.reply_text('You are not authorized to use this bot.')
+        return
+    
+    # Check if traffic monitor is available
+    if not Config.TRAFFIC_MONITOR_AVAILABLE:
+        await update.message.reply_text(Config.get_traffic_monitor_help_message())
         return
     
     threshold_data = check_traffic_thresholds()
@@ -70,3 +93,39 @@ async def traffic_thresholds(update: Update, context: ContextTypes.DEFAULT_TYPE)
         message += "\n✅ All thresholds are within limits."
     
     await update.message.reply_text(message)
+
+async def traffic_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /traffic_check command to manually check thresholds and send notifications."""
+    user = update.effective_user
+    if user.id not in Config.ADMIN_IDS:
+        await update.message.reply_text('You are not authorized to use this bot.')
+        return
+    
+    # Check if traffic monitor is available
+    if not Config.TRAFFIC_MONITOR_AVAILABLE:
+        await update.message.reply_text(Config.get_traffic_monitor_help_message())
+        return
+    
+    await update.message.reply_text('🔄 Checking traffic thresholds...')
+    
+    # Run the check
+    result = await check_and_notify(context)
+    
+    if result['errors']:
+        message = f"⚠️ Traffic check completed with errors:\n" + "\n".join(result['errors'])
+    elif result['notified']:
+        message = f"✅ Traffic check completed.\nNotified {len(result['notified'])} admin(s) about exceeded thresholds."
+    else:
+        message = f"✅ Traffic check completed.\nAll thresholds are within limits."
+    
+    await update.message.reply_text(message)
+
+async def reset_traffic_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /reset_traffic_alerts command to reset notification state."""
+    user = update.effective_user
+    if user.id not in Config.ADMIN_IDS:
+        await update.message.reply_text('You are not authorized to use this bot.')
+        return
+    
+    reset_notifications()
+    await update.message.reply_text('✅ Traffic notification state has been reset.\nYou will be notified again if thresholds are exceeded.')

@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 
 from openvpn_bot.config import Config
+from openvpn_bot.utils import validate_username
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ def disconnect_client(username):
     management_host = Config.OPENVPN_MANAGEMENT_HOST
     management_port = int(Config.OPENVPN_MANAGEMENT_PORT)
 
-    if not username or not username.isalnum():
+    if not validate_username(username):
         logger.error(f"Invalid username for disconnection: {username}")
         return False, f"Invalid username: {username}"
 

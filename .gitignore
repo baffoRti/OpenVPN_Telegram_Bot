@@ -33,3 +33,7 @@ bot_output.txt
 # Backups
 *.backup
 *.bak
+
+# Internal working files
+.ai-cache/
+docs/plans/

@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from openvpn_bot.utils.client_manager import get_connected_clients, disconnect_client
+from openvpn_bot.utils import validate_username
 from openvpn_bot.config import Config
 
 async def clients_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -41,6 +42,12 @@ async def client_disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
     
     username = context.args[0]
+    
+    # Validate username
+    if not validate_username(username):
+        await update.message.reply_text(f'❌ Invalid username: {username}')
+        return
+    
     success, message = disconnect_client(username)
     
     if success:

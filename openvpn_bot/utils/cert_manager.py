@@ -46,3 +46,33 @@ def renew_certificate(common_name):
 def list_certificates():
     """List all certificates."""
     return run_cert_script('list')
+
+def list_all_certificates():
+    """List all certificates including banned ones."""
+    return run_cert_script('list-all')
+
+def ban_certificate(common_name):
+    """Ban a certificate by renaming CN in index.txt."""
+    return run_cert_script('ban', common_name)
+
+def unban_certificate(common_name):
+    """Unban a certificate by restoring CN in index.txt."""
+    return run_cert_script('unban', common_name)
+
+def check_cert_banned(common_name):
+    """Check if a certificate is banned. Returns (is_banned, message)."""
+    # Strip any remaining prefixes
+    clean_name = common_name.replace("[BANNED] ", "").replace("[BANNED]", "").replace("BANNED_", "").strip()
+    
+    success, output = run_cert_script('check-ban', clean_name)
+    
+    if not success:
+        return False, output
+    return output.strip() == 'banned', output
+
+def check_cert_exists(common_name):
+    """Check if a certificate exists. Returns (exists, message)."""
+    success, output = run_cert_script('check-exists', common_name)
+    if not success:
+        return False, output
+    return output == 'exists', output

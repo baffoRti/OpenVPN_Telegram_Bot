@@ -11,11 +11,14 @@ from openvpn_bot.handlers.service_handler import (
 )
 from openvpn_bot.handlers.client_handler import clients_list, client_disconnect
 from openvpn_bot.handlers.traffic_handler import (
-    traffic_stats, user_traffic, traffic_thresholds
+    traffic_stats, user_traffic, traffic_thresholds, traffic_check, reset_traffic_notifications
 )
 from openvpn_bot.handlers.cert_handler import (
-    cert_list, cert_generate, cert_revoke, cert_renew
+    cert_list, cert_generate, cert_revoke, cert_renew, cert_ban, cert_unban
 )
+from openvpn_bot.utils.cert_manager import check_cert_banned
+from openvpn_bot.utils import validate_username
+from openvpn_bot.utils.traffic_notifier import check_and_notify
 
 # Help text constant
 HELP_TEXT = """
@@ -31,10 +34,14 @@ Available commands:
 /traffic - Show traffic statistics
 /user_traffic <username> - Show traffic for specific user
 /throttle - Show traffic thresholds and current usage
+/traffic_check - Manually check traffic thresholds and send notifications
+/reset_traffic_alerts - Reset traffic notification state
 /cert_list - List certificates
 /cert_generate <common_name> - Generate a certificate
 /cert_revoke <common_name> - Revoke a certificate
 /cert_renew <common_name> - Renew a certificate
+/cert_ban <common_name> - Ban a certificate (block access without revoking)
+/cert_unban <common_name> - Unban a certificate (restore access)
 """
 
 # Enable logging
@@ -325,6 +332,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
             username = data.split(":", 1)[1]  # Extract username after "client_disconnect:"
             
+            # Validate username
+            if not validate_username(username):
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=f'❌ Invalid username: {username}',
+                        reply_markup=main_menu_back_keyboard()
+                    )
+                return
+            
             # Ask for confirmation before disconnecting
             if query.message is not None:
                 keyboard = [
@@ -345,6 +361,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
             username = data.split(":", 1)[1]  # Extract username after "confirm_disconnect:"
             
+            # Validate username
+            if not validate_username(username):
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=f'❌ Invalid username: {username}',
+                        reply_markup=main_menu_back_keyboard()
+                    )
+                return
+            
             from openvpn_bot.utils.client_manager import disconnect_client
             success, message = disconnect_client(username)
             
@@ -362,6 +387,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     )
 
         elif data == "traffic_stats":
+            # Check if traffic monitor is available
+            if not Config.TRAFFIC_MONITOR_AVAILABLE:
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=Config.get_traffic_monitor_help_message(),
+                        reply_markup=main_menu_back_keyboard()
+                    )
+                return
+            
             from openvpn_bot.utils.traffic_monitor import get_current_month_traffic, get_top_users
             total_bytes = get_current_month_traffic()
             total_gb = total_bytes / (1024 ** 3)
@@ -390,6 +424,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
 
         elif data == "traffic_all_users":
+            # Check if traffic monitor is available
+            if not Config.TRAFFIC_MONITOR_AVAILABLE:
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=Config.get_traffic_monitor_help_message(),
+                        reply_markup=main_menu_back_keyboard()
+                    )
+                return
+            
             from openvpn_bot.utils.traffic_monitor import get_current_month_traffic, get_all_users_traffic
             current_month = datetime.now().strftime('%Y-%m')
             total_bytes = get_current_month_traffic()
@@ -423,6 +466,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
 
         elif data == "traffic_last_month":
+            # Check if traffic monitor is available
+            if not Config.TRAFFIC_MONITOR_AVAILABLE:
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=Config.get_traffic_monitor_help_message(),
+                        reply_markup=main_menu_back_keyboard()
+                    )
+                return
+            
             from openvpn_bot.utils.traffic_monitor import get_month_traffic, get_all_users_traffic, get_last_month_str
             last_month = get_last_month_str()
             total_bytes = get_month_traffic(last_month)
@@ -457,8 +509,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
 
         elif data == "cert_list" or data.startswith("cert_list:"):
-            from openvpn_bot.utils.cert_manager import list_certificates
-            success, message = list_certificates()
+            from openvpn_bot.utils.cert_manager import list_all_certificates
+            success, message = list_all_certificates()
 
             # Parse page number from callback data
             page = 0
@@ -472,6 +524,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if query.message is not None:
                     lines = [l.strip() for l in message.strip().split('\n') if l.strip()]
                     total = len(lines)
+                    
+                    if total == 0:
+                        # No certificates - show simple message with generate button
+                        await query.edit_message_text(
+                            text='📋 No certificates yet.',
+                            reply_markup=InlineKeyboardMarkup([
+                                [InlineKeyboardButton("➕ Generate New Certificate", callback_data="cert_generate_prompt")],
+                                [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")]
+                            ])
+                        )
+                        return
+                    
                     per_page = 10
                     total_pages = max(1, (total + per_page - 1) // per_page)
                     page = max(0, min(page, total_pages - 1))
@@ -480,8 +544,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     page_certs = lines[start:end]
 
                     title = f"📋 Certificates ({total} total, page {page + 1}/{total_pages}):"
-                    if total == 0:
-                        title = "📋 No certificates found."
 
                     keyboard = []
                     for cert_name in page_certs:
@@ -534,23 +596,47 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
             cert_name = data.split(":", 1)[1]  # Extract certificate name after "cert_action:"
             
-            # Show action menu for this certificate
+            # Strip all prefixes to get clean certificate name
+            # Format can be: "[BANNED] Test", "BANNED_Test", or just "Test"
+            clean_name = cert_name
+            clean_name = clean_name.replace("[BANNED] ", "").replace("[BANNED]", "")
+            clean_name = clean_name.replace("BANNED_", "")
+            clean_name = clean_name.strip()
+            
+            # Check if certificate is banned
+            is_banned, _ = check_cert_banned(clean_name)
+            
+            # Build keyboard based on ban status
             if query.message is not None:
                 keyboard = [
                     [
-                        InlineKeyboardButton("📥 Download Config", callback_data=f"cert_download:{cert_name}")
+                        InlineKeyboardButton("📥 Download Config", callback_data=f"cert_download:{clean_name}")
                     ],
                     [
-                        InlineKeyboardButton("❌ Revoke", callback_data=f"cert_revoke:{cert_name}"),
-                        InlineKeyboardButton("🔄 Renew", callback_data=f"cert_renew:{cert_name}")
-                    ],
-                    [
-                        InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
+                        InlineKeyboardButton("❌ Revoke", callback_data=f"cert_revoke:{clean_name}"),
+                        InlineKeyboardButton("🔄 Renew", callback_data=f"cert_renew:{clean_name}")
                     ]
                 ]
+                
+                # Add Ban or Unban button based on status
+                if is_banned:
+                    keyboard.append([
+                        InlineKeyboardButton("✅ Unban", callback_data=f"cert_unban:{clean_name}")
+                    ])
+                    status_text = "🚫 Banned"
+                else:
+                    keyboard.append([
+                        InlineKeyboardButton("🚫 Ban", callback_data=f"cert_ban:{clean_name}")
+                    ])
+                    status_text = "✅ Active"
+                
+                keyboard.append([
+                    InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
+                ])
+                
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await query.edit_message_text(
-                    text=f'Select action for certificate: {cert_name}',
+                    text=f'Certificate: {clean_name}\nStatus: {status_text}',
                     reply_markup=reply_markup
                 )
 
@@ -559,6 +645,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if data is None:
                 return
             cert_name = data.split(":", 1)[1]
+            
+            # Strip [BANNED] prefix if present
+            cert_name = cert_name.replace("[BANNED] ", "").replace("[BANNED]", "").strip()
+            
             ovpn_path = os.path.join(Config.OPENVPN_CERT_DIR, f"{cert_name}.ovpn")
 
             if not os.path.exists(ovpn_path):
@@ -584,6 +674,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parts = data.split(":", 2)  # Split into [action, cert_name]
             action = parts[0]  # "cert_revoke" or "cert_renew"
             cert_name = parts[1]  # certificate name
+            
+            # Strip [BANNED] prefix if present
+            cert_name = cert_name.replace("[BANNED] ", "").replace("[BANNED]", "").strip()
             
             # Ask for confirmation
             action_text = "revoke" if action == "cert_revoke" else "renew"
@@ -613,6 +706,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             action = parts[0]   # "confirm_revoke" or "confirm_renew"
             cert_name = parts[1]
+            
+            # Strip [BANNED] prefix if present
+            cert_name = cert_name.replace("[BANNED] ", "").replace("[BANNED]", "").strip()
 
             # Import the appropriate function
             from openvpn_bot.utils.cert_manager import revoke_certificate, renew_certificate
@@ -621,14 +717,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if action == "confirm_revoke":
                 success, message = revoke_certificate(cert_name)
                 action_text = "revoked"
+                success_msg = f'✅ Certificate revoked: {cert_name}'
+                error_msg = f'❌ Failed to revoke certificate: {message}'
             else:  # confirm_renew
                 success, message = renew_certificate(cert_name)
                 action_text = "renewed"
+                success_msg = f'✅ Certificate renewed: {cert_name}'
+                error_msg = f'❌ Failed to renew certificate: {message}'
             
             if success:
                 if query.message is not None:
                     await query.edit_message_text(
-                        text=f'✅ Certificate {action_text} successfully: {message}',
+                        text=success_msg,
                         reply_markup=InlineKeyboardMarkup([[
                             InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
                         ]])
@@ -636,7 +736,84 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             else:
                 if query.message is not None:
                     await query.edit_message_text(
-                        text=f'❌ Error {action_text}ing certificate: {message}',
+                        text=error_msg,
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
+                        ]])
+                    )
+
+        elif data.startswith("cert_ban:") or data.startswith("cert_unban:"):
+            # Handle certificate ban/unban request
+            if data is None:
+                return
+            parts = data.split(":", 2)
+            action = parts[0]  # "cert_ban" or "cert_unban"
+            cert_name = parts[1]
+            
+            # Strip [BANNED] prefix if present
+            cert_name = cert_name.replace("[BANNED] ", "").replace("[BANNED]", "").strip()
+            
+            # Ask for confirmation
+            action_text = "ban" if action == "cert_ban" else "unban"
+            confirm_action = "confirm_ban" if action == "cert_ban" else "confirm_unban"
+            action_emoji = "🚫" if action == "cert_ban" else "✅"
+            
+            if query.message is not None:
+                keyboard = [
+                    [
+                        InlineKeyboardButton(f"{action_emoji} Yes, {action_text.title()}", callback_data=f"{confirm_action}:{cert_name}"),
+                        InlineKeyboardButton("❌ Cancel", callback_data=f"cert_action:{cert_name}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    text=f'Are you sure you want to {action_text} certificate "{cert_name}"?',
+                    reply_markup=reply_markup
+                )
+
+        elif data.startswith("confirm_ban:") or data.startswith("confirm_unban:"):
+            # Handle confirmed certificate ban/unban
+            if data is None:
+                return
+            parts = data.split(":", 1)
+            if len(parts) < 2:
+                if query.message is not None:
+                    await query.edit_message_text(text="Invalid callback data")
+                return
+
+            action = parts[0]   # "confirm_ban" or "confirm_unban"
+            cert_name = parts[1]
+            
+            # Strip [BANNED] prefix if present
+            cert_name = cert_name.replace("[BANNED] ", "").replace("[BANNED]", "").strip()
+
+            # Import the appropriate function
+            from openvpn_bot.utils.cert_manager import ban_certificate, unban_certificate
+
+            # Call the appropriate function
+            if action == "confirm_ban":
+                success, message = ban_certificate(cert_name)
+                action_text = "ban"
+                success_msg = f'✅ Certificate banned: {cert_name}'
+                error_msg = f'❌ Failed to ban certificate: {message}'
+            else:  # confirm_unban
+                success, message = unban_certificate(cert_name)
+                action_text = "unban"
+                success_msg = f'✅ Certificate unbanned: {cert_name}'
+                error_msg = f'❌ Failed to unban certificate: {message}'
+            
+            if success:
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=success_msg,
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
+                        ]])
+                    )
+            else:
+                if query.message is not None:
+                    await query.edit_message_text(
+                        text=error_msg,
                         reply_markup=InlineKeyboardMarkup([[
                             InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
                         ]])
@@ -715,7 +892,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         if success:
             await update.message.reply_text(
-                f'✅ Certificate generated successfully: {message}',
+                f'✅ Certificate generated successfully: {cert_name}',
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Back to Certificate List", callback_data="cert_list")
                 ]])
@@ -733,6 +910,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             'Use the buttons below or tap Start to open the menu.',
             reply_markup=main_menu_keyboard()
         )
+
+
+async def traffic_check_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Periodic job to check traffic thresholds and send notifications."""
+    logger.debug("Running periodic traffic check...")
+    result = await check_and_notify(context)
+    if result['errors']:
+        logger.warning(f"Traffic check completed with errors: {result['errors']}")
 
 
 def main() -> None:
@@ -771,18 +956,38 @@ def main() -> None:
     application.add_handler(CommandHandler("traffic", traffic_stats))
     application.add_handler(CommandHandler("user_traffic", user_traffic))
     application.add_handler(CommandHandler("throttle", traffic_thresholds))
+    application.add_handler(CommandHandler("traffic_check", traffic_check))
+    application.add_handler(CommandHandler("reset_traffic_alerts", reset_traffic_notifications))
     
     # Certificate management
     application.add_handler(CommandHandler("cert_list", cert_list))
     application.add_handler(CommandHandler("cert_generate", cert_generate))
     application.add_handler(CommandHandler("cert_revoke", cert_revoke))
     application.add_handler(CommandHandler("cert_renew", cert_renew))
+    application.add_handler(CommandHandler("cert_ban", cert_ban))
+    application.add_handler(CommandHandler("cert_unban", cert_unban))
     
     # Button callbacks
     application.add_handler(CallbackQueryHandler(button_callback))
     
     # Handle text messages (for certificate generation input and fallback)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Setup periodic traffic check job (if traffic monitor is available)
+    if Config.TRAFFIC_MONITOR_AVAILABLE:
+        job_queue = application.job_queue
+        # Run traffic check every TRAFFIC_CHECK_INTERVAL seconds
+        job_queue.run_repeating(
+            traffic_check_job,
+            interval=Config.TRAFFIC_CHECK_INTERVAL,
+            first=60  # First check after 60 seconds
+        )
+        logger.info(
+            f"Traffic threshold monitoring enabled. "
+            f"Check interval: {Config.TRAFFIC_CHECK_INTERVAL} seconds"
+        )
+    else:
+        logger.info("Traffic threshold monitoring disabled (traffic monitor not available)")
 
     # Start the Bot
     logger.info("Starting OpenVPN Telegram Bot...")

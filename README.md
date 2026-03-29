@@ -1,63 +1,80 @@
 # OpenVPN Telegram Bot
 
-A Telegram bot for managing OpenVPN server, monitoring traffic, and managing certificates.
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Telegram Bot API](https://img.shields.io/badge/Bot%20API-22.7-blue)](https://core.telegram.org/bots/api)
+
+A Telegram bot for remote management of OpenVPN servers. Control your VPN service, monitor traffic, manage certificates, and handle connected clients — all from Telegram.
+
+![Bot Interface](docs/images/Interface_Example.png)
 
 ## Features
 
-- Control OpenVPN service (start, stop, restart, status)
-- View connected clients and disconnect them
-- Monitor traffic usage with statistics from SQLite3 database
-- Manage certificates (generate, revoke, renew, list)
-- Receive notifications when traffic crosses configured thresholds (500GB, 700GB, 900GB)
-- Authorization by Telegram user ID
+- **Service Management** — Start, stop, restart OpenVPN service and check its status
+- **Client Monitoring** — View all connected clients with real-time traffic statistics
+- **Traffic Control** — Monitor traffic usage with configurable threshold alerts (500GB, 700GB, 900GB)
+- **Certificate Management** — Generate, revoke, renew, and list client certificates
+- **Client Control** — Disconnect specific clients from the VPN
+- **Security** — Admin-only access restricted by Telegram user IDs
 
-## Deploy on Linux Server
-
-### Prerequisites
+## Requirements
 
 - Ubuntu/Debian server with root access
-- OpenVPN installed and running
-- Python 3.9+
+- OpenVPN installed and configured
+- Python 3.9 or higher
+- Telegram Bot Token (from @BotFather)
 
-### Step 1: Prepare the Server
+## Quick Start
+
+Clone the repository and run the installation script:
 
 ```bash
-# Update and install dependencies
+git clone https://github.com/baffoRti/OpenVPN_Telegram_Bot.git
+cd OpenVPN_Telegram_Bot
+sudo bash deploy/install.sh
+```
+
+The script will:
+1. Verify OpenVPN and Python installations
+2. Create a Python virtual environment
+3. Install all dependencies
+4. Configure sudoers for service management
+5. Install and enable the systemd service
+
+After installation, configure the bot:
+
+```bash
+nano .env
+```
+
+Set your `TELEGRAM_TOKEN` and `ADMIN_IDS`, then start the bot:
+
+```bash
+sudo systemctl start openvpn-bot
+```
+
+## Manual Installation
+
+If you prefer manual setup, follow these steps:
+
+### 1. Install System Dependencies
+
+```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip
-
-# Verify OpenVPN is running
-systemctl status openvpn
+sudo apt install python3 python3-venv python3-pip
 ```
 
-### Step 2: Upload the Project
-
-Clone the repo to the server:
+### 2. Set Up Python Environment
 
 ```bash
-git clone https://github.com/baffoRti/OpenVPN_Telegram_Bot
-```
-
-### Step 3: Set Up Python Environment
-
-```bash
-cd /OpenVPN_Telegram_Bot/openvpn-bot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Step 4: Configure OpenVPN
+### 3. Configure OpenVPN Management Interface
 
-#### 4a. Management Interface
-
-openvpn-install.sh does **not** enable the management interface by default. Add it to allow the bot to disconnect clients:
-
-```bash
-sudo nano /etc/openvpn/server.conf
-```
-
-Add this line at the end:
+Add to your OpenVPN server configuration (`/etc/openvpn/server.conf` or `/etc/openvpn/server/server.conf`):
 
 ```
 management localhost 7505
@@ -67,118 +84,35 @@ Restart OpenVPN:
 
 ```bash
 sudo systemctl restart openvpn-server@server
-# or on Debian/Ubuntu:
-# sudo systemctl restart openvpn@server
 ```
 
-#### 4b. Status File
-
-openvpn-install.sh already configures the status file at `/var/log/openvpn/status.log` (line in server.conf). Verify:
-
-```bash
-grep '^status' /etc/openvpn/server.conf
-```
-
-Expected output: `status /var/log/openvpn/status.log`
-
-#### 4c. Certificate Script (manage_certs.sh)
-
-Make the certificate management script executable:
-
-```bash
-sudo chmod +x /OpenVPN_Telegram_Bot/manage_certs.sh
-```
-
-Test it:
-
-```bash
-sudo /OpenVPN_Telegram_Bot/manage_certs.sh list
-```
-
-The script wraps easy-rsa at `/etc/openvpn/easy-rsa/` (installed by openvpn-install.sh) and supports 4 operations:
-
-| Command | Description |
-|---|---|
-| `manage_certs.sh list` | Lists valid client certificates from `pki/index.txt` |
-| `manage_certs.sh generate <name>` | Creates cert + private key + `.ovpn` config |
-| `manage_certs.sh revoke <name>` | Revokes cert, updates CRL, deletes `.ovpn` |
-| `manage_certs.sh renew <name>` | Revoke + generate (re-issues the certificate) |
-
-Generated `.ovpn` files are saved to the path configured in `OPENVPN_CERT_DIR` (default: `/etc/openvpn/easy-rsa/pki`). The bot can send these files to users via the "Download Config" button.
-
-### Step 5: Configure the Bot
+### 4. Configure Environment
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Fill in:
+### 5. Configure Sudoers
 
-```env
-TELEGRAM_TOKEN=your_bot_token_from_botfather
-ADMIN_IDS=your_telegram_id,another_admin_id
-OPENVPN_DB_PATH=/OpenVPN_Telegram_Bot/openvpn_stats.db
-CERT_SCRIPT_PATH=/OpenVPN_Telegram_Bot/manage_certs.sh
-OPENVPN_CERT_DIR=/etc/openvpn/easy-rsa/pki
-OPENVPN_STATUS_FILE=/var/log/openvpn/status.log
-OPENVPN_MANAGEMENT_HOST=localhost
-OPENVPN_MANAGEMENT_PORT=7505
-TRAFFIC_THRESHOLDS=500,700,900
-```
-
-### Step 6: Configure Sudoers (No-Password Commands)
-
-The bot needs to run systemctl and manage_certs.sh without a password prompt:
+Create `/etc/sudoers.d/openvpn-bot`:
 
 ```bash
-sudo visudo -f /etc/sudoers.d/openvpn-bot
+your_username ALL=(ALL) NOPASSWD: /usr/bin/systemctl start openvpn-server@server, /usr/bin/systemctl stop openvpn-server@server, /usr/bin/systemctl restart openvpn-server@server, /usr/bin/systemctl is-active openvpn-server@server, /path/to/manage_certs.sh
 ```
 
-Add this line (replace `your_user` with the actual user running the bot, adjust service name if needed):
-
-```
-your_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start openvpn-server@server, /usr/bin/systemctl stop openvpn-server@server, /usr/bin/systemctl restart openvpn-server@server, /usr/bin/systemctl is-active openvpn-server@server, /OpenVPN_Telegram_Bot/manage_certs.sh
-```
-
-> **Note:** openvpn-install.sh may use `openvpn@server` instead of `openvpn-server@server` depending on the OS. Check with `systemctl list-units | grep openvpn`.
-
-Verify:
+### 6. Install Systemd Service
 
 ```bash
-sudo -l
+sudo cp deploy/openvpn-bot.service /etc/systemd/system/
 ```
 
-Then update the `run_command` calls in the code to use `sudo systemctl` instead of just `systemctl`. The simplest approach — modify `openvpn_service.py` to prepend `sudo`:
-
-```python
-success, output = run_command(f"sudo systemctl {action} {service_name}")
-```
-
-### Step 7: Create systemd Service
-
-Create a service file so the bot starts automatically:
-
-```bash
-sudo nano /etc/systemd/system/openvpn-bot.service
-```
+Edit the service file to set correct paths:
 
 ```ini
-[Unit]
-Description=OpenVPN Telegram Bot
-After=network.target openvpn-server@server.service
-
 [Service]
-Type=simple
-User=your_user # Specify your user
-Group=your_user # Specify your user
-WorkingDirectory=/OpenVPN_Telegram_Bot # Specify your directory
-ExecStart=/OpenVPN_Telegram_Bot/venv/bin/python -m openvpn_bot.bot # Specify your path
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+WorkingDirectory=/path/to/OpenVPN_Telegram_Bot
+ExecStart=/path/to/OpenVPN_Telegram_Bot/venv/bin/python -m openvpn_bot.bot
 ```
 
 Enable and start:
@@ -189,73 +123,156 @@ sudo systemctl enable openvpn-bot
 sudo systemctl start openvpn-bot
 ```
 
-### Step 8: Verify
+## Configuration
+
+Edit the `.env` file to configure the bot:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `TELEGRAM_TOKEN` | Yes | — | Bot token from @BotFather |
+| `ADMIN_IDS` | Yes | — | Comma-separated Telegram user IDs |
+| `OPENVPN_DB_PATH` | No | `openvpn_stats.db` | Path to SQLite traffic database |
+| `CERT_SCRIPT_PATH` | No | `./manage_certs.sh` | Certificate management script path |
+| `OPENVPN_STATUS_FILE` | No | `/var/log/openvpn/status.log` | OpenVPN status file |
+| `OPENVPN_MANAGEMENT_HOST` | No | `localhost` | Management interface host |
+| `OPENVPN_MANAGEMENT_PORT` | No | `7505` | Management interface port |
+| `TRAFFIC_THRESHOLDS` | No | `500,700,900` | Traffic alert thresholds in GB |
+| `TRAFFIC_CHECK_INTERVAL` | No | `10800` | Check interval in seconds (3 hours) |
+
+### Getting Your Telegram User ID
+
+Send `/start` to [@userinfobot](https://t.me/userinfobot) in Telegram to get your user ID.
+
+## Bot Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Show main menu |
+| `/status` | Check OpenVPN service status |
+| `/start_vpn` | Start OpenVPN service |
+| `/stop_vpn` | Stop OpenVPN service |
+| `/restart_vpn` | Restart OpenVPN service |
+| `/clients` | List connected clients |
+| `/disconnect` | Disconnect a client |
+| `/traffic` | Show traffic statistics |
+| `/user_traffic` | Show per-user traffic |
+| `/cert_list` | List certificates |
+| `/cert_generate <name>` | Generate new certificate |
+| `/cert_revoke <name>` | Revoke certificate |
+| `/cert_renew <name>` | Renew certificate |
+| `/cert_ban <name>` | Ban certificate |
+| `/cert_unban <name>` | Unban certificate |
+
+## Service Management
 
 ```bash
-# Check bot status
+# Start the bot
+sudo systemctl start openvpn-bot
+
+# Stop the bot
+sudo systemctl stop openvpn-bot
+
+# Restart the bot
+sudo systemctl restart openvpn-bot
+
+# Check status
 sudo systemctl status openvpn-bot
 
 # View logs
 sudo journalctl -u openvpn-bot -f
 ```
 
-Send `/start` to your bot in Telegram.
-
-## Configuration Reference
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `TELEGRAM_TOKEN` | Yes | — | Bot token from @BotFather |
-| `ADMIN_IDS` | Yes | — | Comma-separated Telegram user IDs |
-| `OPENVPN_DB_PATH` | No | `openvpn_stats.db` | Path to SQLite traffic database |
-| `CERT_SCRIPT_PATH` | No | `./manage_certs.sh` | Path to certificate management script |
-| `OPENVPN_CERT_DIR` | No | `/etc/openvpn/easy-rsa/pki` | Directory for certificates and `.ovpn` config files |
-| `OPENVPN_STATUS_FILE` | No | `/var/log/openvpn/status.log` | OpenVPN status file path |
-| `OPENVPN_MANAGEMENT_HOST` | No | `localhost` | Management interface host |
-| `OPENVPN_MANAGEMENT_PORT` | No | `7505` | Management interface port |
-| `TRAFFIC_THRESHOLDS` | No | `500,700,900` | Traffic alert thresholds in GB |
-
-## Database Schema
-
-The bot expects an SQLite3 database with the following tables (You can find out more [here](https://github.com/baffoRti/OpenVPN_Traffic_Monitor "OpenVPN Traffic Monitor")):
-
-### user_traffic_monthly
-- `common_name` (TEXT, PRIMARY KEY)
-- `year_month` (TEXT, PRIMARY KEY) — format YYYY-MM
-- `bytes_received` (INTEGER)
-- `bytes_sent` (INTEGER)
-
-### current_client_state
-- `common_name` (TEXT, PRIMARY KEY)
-- `connected_since` (TEXT)
-- `bytes_received` (INTEGER)
-- `bytes_sent` (INTEGER)
-
-### log_metadata
-- `id` (INTEGER, PRIMARY KEY)
-- `last_updated_time` (TEXT)
-
-## Management Commands
+## Updating
 
 ```bash
-# Start/stop/restart
-sudo systemctl start openvpn-bot
-sudo systemctl stop openvpn-bot
-sudo systemctl restart openvpn-bot
-
-# View logs
-sudo journalctl -u openvpn-bot -f
-
-# Update the bot
-cd /OpenVPN_Telegram_Bot
+cd /path/to/OpenVPN_Telegram_Bot
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
 sudo systemctl restart openvpn-bot
 ```
 
-## Security
+## Project Structure
 
-- Only users listed in `ADMIN_IDS` can interact with the bot
-- Sudoers is restricted to specific systemctl commands only
-- Ensure the certificate management script is owned by root and not world-writable
+```
+OpenVPN_Telegram_Bot/
+├── deploy/
+│   ├── install.sh           # Automated installation script
+│   ├── manage_certs.sh      # Certificate management script
+│   ├── .env.example         # Environment template
+│   ├── requirements.txt     # Python dependencies
+│   └── openvpn-bot.service  # Systemd service file
+├── openvpn_bot/
+│   ├── bot.py               # Main bot application
+│   ├── config.py            # Configuration handling
+│   ├── handlers/            # Command handlers
+│   │   ├── cert_handler.py
+│   │   ├── client_handler.py
+│   │   ├── service_handler.py
+│   │   └── traffic_handler.py
+│   └── utils/               # Utility modules
+│       ├── cert_manager.py
+│       ├── client_manager.py
+│       ├── openvpn_service.py
+│       ├── traffic_monitor.py
+│       └── traffic_notifier.py
+├── manage_certs.sh          # Certificate management (root)
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+## Troubleshooting
+
+### Bot fails to start
+
+Check the logs for errors:
+
+```bash
+sudo journalctl -u openvpn-bot -n 50
+```
+
+Common issues:
+- Missing or invalid `TELEGRAM_TOKEN`
+- Missing or invalid `ADMIN_IDS`
+- Python dependencies not installed
+
+### Cannot connect to OpenVPN management interface
+
+Ensure the management interface is enabled in your OpenVPN config:
+
+```
+management localhost 7505
+```
+
+Then restart OpenVPN:
+
+```bash
+sudo systemctl restart openvpn-server@server
+```
+
+### Certificate generation fails
+
+Verify that easy-rsa is properly installed:
+
+```bash
+ls /etc/openvpn/server/easy-rsa/easyrsa
+```
+
+Test the certificate script:
+
+```bash
+sudo ./manage_certs.sh list
+```
+
+### Permission denied errors
+
+Ensure sudoers is properly configured. Check `/etc/sudoers.d/openvpn-bot` exists and has correct permissions.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome. Please open an issue to discuss your ideas before submitting a pull request.

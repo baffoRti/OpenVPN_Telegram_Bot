@@ -9,10 +9,10 @@ async def service_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if user.id not in Config.ADMIN_IDS:
         await update.message.reply_text('You are not authorized to use this bot.')
         return
-    
-    status, error = get_service_status()
-    if error:
-        await update.message.reply_text(f'Error checking OpenVPN service status: {error}')
+
+    success, status = get_service_status()
+    if not success:
+        await update.message.reply_text(f'Error checking OpenVPN service status: {status}')
     else:
         await update.message.reply_text(f'OpenVPN service status: {status}')
 
