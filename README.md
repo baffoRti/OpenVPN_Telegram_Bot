@@ -152,6 +152,18 @@ Edit the `.env` file to configure the bot:
 | `TRAFFIC_THRESHOLDS` | No | `500,700,900` | Traffic alert thresholds in GB |
 | `TRAFFIC_CHECK_INTERVAL` | No | `10800` | Check interval in seconds (3 hours) |
 
+### Traffic Database Setup
+
+The bot uses an SQLite database to track traffic statistics. You need to set up the database separately using the [OpenVPN Traffic Monitor](https://github.com/baffoRti/OpenVPN_Traffic_Monitor) project.
+
+Set the path to the database in `.env`:
+
+```bash
+OPENVPN_DB_PATH=/path/to/openvpn_stats.db
+```
+
+If the database file does not exist, the bot will still run but traffic statistics features will not work until the database is created.
+
 ### Getting Your Telegram User ID
 
 Send `/start` to [@userinfobot](https://t.me/userinfobot) in Telegram to get your user ID.
