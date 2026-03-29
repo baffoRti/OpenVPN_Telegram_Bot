@@ -112,7 +112,7 @@ Edit the service file to set correct paths:
 ```ini
 [Service]
 WorkingDirectory=/path/to/OpenVPN_Telegram_Bot
-ExecStart=/path/to/OpenVPN_Telegram_Bot/venv/bin/python -m openvpn_bot.bot
+ExecStart=/path/to/OpenVPN_Telegram_Bot/venv/bin/python3 -m openvpn_bot.bot
 ```
 
 Enable and start:
@@ -268,11 +268,3 @@ sudo ./manage_certs.sh list
 ### Permission denied errors
 
 Ensure sudoers is properly configured. Check `/etc/sudoers.d/openvpn-bot` exists and has correct permissions.
-
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome. Please open an issue to discuss your ideas before submitting a pull request.
