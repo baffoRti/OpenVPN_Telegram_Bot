@@ -50,7 +50,7 @@ def format_notification_message(data: Dict) -> str:
         else:
             message_lines.append(f"• {threshold} GB: ✅ Not exceeded")
     
-    message_lines.append("\nView details: /throttle")
+    #message_lines.append("\nView details: /throttle")
     
     return "\n".join(message_lines)
 
