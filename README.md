@@ -2,7 +2,6 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Telegram Bot API](https://img.shields.io/badge/Bot%20API-22.7-blue)](https://core.telegram.org/bots/api)
 
 A Telegram bot for remote management of OpenVPN servers. Control your VPN service, monitor traffic, manage certificates, and handle connected clients — all from Telegram.
 
