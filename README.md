@@ -217,35 +217,6 @@ pip install -r requirements.txt
 sudo systemctl restart openvpn-bot
 ```
 
-## Project Structure
-
-```
-OpenVPN_Telegram_Bot/
-├── deploy/
-│   ├── install.sh           # Automated installation script
-│   ├── manage_certs.sh      # Certificate management script
-│   ├── requirements.txt     # Python dependencies
-│   └── openvpn-bot.service  # Systemd service file
-├── openvpn_bot/
-│   ├── bot.py               # Main bot application
-│   ├── config.py            # Configuration handling
-│   ├── handlers/            # Command handlers
-│   │   ├── cert_handler.py
-│   │   ├── client_handler.py
-│   │   ├── service_handler.py
-│   │   └── traffic_handler.py
-│   └── utils/               # Utility modules
-│       ├── cert_manager.py
-│       ├── client_manager.py
-│       ├── openvpn_service.py
-│       ├── traffic_monitor.py
-│       └── traffic_notifier.py
-├── manage_certs.sh          # Certificate management (root)
-├── requirements.txt
-├── .env.example
-└── README.md
-```
-
 ## Troubleshooting
 
 ### Bot fails to start
